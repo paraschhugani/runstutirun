@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Run Stuti Run!</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; -webkit-user-select: none; }
         canvas { display: block; width: 100%; height: 100%; }
         
         /* UI OVERLAY */
@@ -442,13 +442,8 @@
             // Camera (Perspective)
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
             camera.position.set(0, 5, 8);
-            camera.lookAt(0, 2, -15);
-            
-            // Initial FOV adjustment
-            if(window.innerHeight > window.innerWidth) {
-                camera.fov = 75;
-                camera.position.z = 10; // Pull back slightly
-            }
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+            adjustCamera(); // Initial setup
 
             // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -533,20 +528,29 @@
 
             // Handle Resize
             window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
+                const width = window.innerWidth;
+                const height = window.innerHeight;
                 
-                // Adjust FOV for portrait
-                if(window.innerHeight > window.innerWidth) {
-                    camera.fov = 75; 
-                    if(camera.position.z < 9) camera.position.z = 10;
-                } else {
-                    camera.fov = 60;
-                    if(camera.position.z > 9) camera.position.z = 8;
-                }
+                camera.aspect = width / height;
+                adjustCamera();
                 
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setSize(width, height);
             });
+        }
+
+        function adjustCamera() {
+            const aspect = window.innerWidth / window.innerHeight;
+            if (aspect < 1) {
+                // Portrait Mode (Mobile) - Aggressive fix for narrow screens
+                camera.fov = 95; 
+                camera.position.set(0, 8, 15); // Much higher and further back
+            } else {
+                // Landscape Mode (Desktop)
+                camera.fov = 60;
+                camera.position.set(0, 5, 8);
+            }
+            camera.lookAt(0, 2, -15); // Re-focus
+            camera.updateProjectionMatrix();
         }
 
         function createAssets() {
@@ -2018,8 +2022,6 @@
             let touchStartY = 0;
 
             window.addEventListener('touchstart', (e) => {
-                // Prevent default browser behavior (scroll, zoom, refresh)
-                if(e.cancelable) e.preventDefault(); 
                 SFX.init();
                 touchStartX = e.changedTouches[0].screenX;
                 touchStartY = e.changedTouches[0].screenY;
@@ -2032,11 +2034,6 @@
                 const touchEndY = e.changedTouches[0].screenY;
                 
                 handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY);
-            }, {passive: false});
-
-            // Prevent touch moves from scrolling
-            window.addEventListener('touchmove', (e) => {
-                if(e.cancelable) e.preventDefault();
             }, {passive: false});
         }
 
