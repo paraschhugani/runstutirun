@@ -1752,6 +1752,8 @@
             worldChunkManager.reset();
             player.reset();
             police.reset();
+            
+            adjustCamera(); // Ensure camera is correct for current device
         }
 
         function loadSaveData() {
@@ -1824,7 +1826,7 @@
 
             setTimeout(() => {
                 clearInterval(shakeInterval);
-                camera.position.set(0, 5, 8); // Reset Cam
+                adjustCamera(); // Reset camera according to device aspect ratio
                 document.getElementById('hud').classList.add('hidden');
                 document.getElementById('game-over').classList.remove('hidden');
                 document.getElementById('final-score').innerText = Math.floor(score);
