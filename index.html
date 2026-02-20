@@ -339,8 +339,7 @@
                 rails: 0x333333,
                 fog: 0x1a1a1a,
                 policeUniform: 0x1034a6,
-                // Indian building colors: dusty pinks, light yellows, terracotta, faded greens, blues, beige
-                building: [0xdc8686, 0xf4d160, 0x82b26b, 0xa5d8dd, 0xe4d3a8, 0xbf5c5c, 0xfaf1e6, 0xd0b49f]
+                building: [0x2c3e50, 0x34495e, 0x1a1a1a, 0x2c2c2c]
             }
         };
 
@@ -463,20 +462,13 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            renderer.outputEncoding = THREE.sRGBEncoding;
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;
             document.body.appendChild(renderer.domElement);
 
             // Lighting (Cinematic Realism)
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
-            
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
-            hemiLight.position.set(0, 200, 0);
-            scene.add(hemiLight);
 
-            const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
             dirLight.position.set(50, 100, 50);
             dirLight.castShadow = true;
             dirLight.shadow.mapSize.width = 2048;
@@ -520,25 +512,23 @@
             ground.receiveShadow = true;
             scene.add(ground);
 
-            // Realistic Night Sky Skybox
+            // Neon City Skybox
             const skyCanvas = document.createElement('canvas');
-            skyCanvas.width = 1024; skyCanvas.height = 1024;
+            skyCanvas.width = 512; skyCanvas.height = 512;
             const sCtx = skyCanvas.getContext('2d');
-            const skyGrad = sCtx.createLinearGradient(0, 0, 0, 1024);
-            skyGrad.addColorStop(0, '#000814');
-            skyGrad.addColorStop(0.5, '#001d3d');
-            skyGrad.addColorStop(0.8, '#003566');
-            skyGrad.addColorStop(1, '#ffc300'); // City glow at bottom
+            const skyGrad = sCtx.createLinearGradient(0, 0, 0, 512);
+            skyGrad.addColorStop(0, '#000022');
+            skyGrad.addColorStop(0.5, '#110022');
+            skyGrad.addColorStop(1, '#220044');
             sCtx.fillStyle = skyGrad;
-            sCtx.fillRect(0, 0, 1024, 1024);
+            sCtx.fillRect(0, 0, 512, 512);
             
-            // Stars
-            for(let i=0; i<1000; i++) {
-                sCtx.fillStyle = `rgba(255, 255, 255, ${Math.random()})`;
-                const size = Math.random() * 2;
-                sCtx.beginPath();
-                sCtx.arc(Math.random()*1024, Math.random()*512, size, 0, Math.PI * 2);
-                sCtx.fill();
+            // Procedural Neon Buildings/Stars
+            for(let i=0; i<300; i++) {
+                sCtx.fillStyle = ['#0ff', '#f0f', '#ff0', '#fff'][Math.floor(Math.random()*4)];
+                sCtx.globalAlpha = Math.random();
+                const size = Math.random() * 3;
+                sCtx.fillRect(Math.random()*512, Math.random()*512, size, size);
             }
             
             const skyTex = new THREE.CanvasTexture(skyCanvas);
@@ -593,49 +583,38 @@
             rCanvas.width = 64; rCanvas.height = 64;
             const rCtx = rCanvas.getContext('2d');
             rCtx.fillStyle = '#5d4037'; rCtx.fillRect(0,0,64,64); // Gravel/Dirt
-            for(let i=0; i<300; i++) {
-                rCtx.fillStyle = Math.random() > 0.5 ? '#4e342e' : '#6d4c41';
-                rCtx.fillRect(Math.random()*64, Math.random()*64, 2, 2);
-            }
             rCtx.fillStyle = '#3e2723'; rCtx.fillRect(0,10,64,10); // Tie
-            for(let i=0; i<50; i++) {
-                rCtx.fillStyle = '#2d1a16';
-                rCtx.fillRect(Math.random()*64, 10 + Math.random()*10, 1, 1);
-            }
             rCtx.fillStyle = '#7f8c8d'; rCtx.fillRect(10,0,8,64); rCtx.fillRect(46,0,8,64); // Rails
-            rCtx.fillStyle = '#bdc3c7'; rCtx.fillRect(12,0,4,64); rCtx.fillRect(48,0,4,64); // Rail shine
             const railTex = new THREE.CanvasTexture(rCanvas);
-            if (renderer.capabilities) railTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
             railTex.wrapS = THREE.RepeatWrapping;
             railTex.wrapT = THREE.RepeatWrapping;
-            railTex.magFilter = THREE.LinearFilter;
-            railTex.minFilter = THREE.LinearMipMapLinearFilter;
+            railTex.magFilter = THREE.NearestFilter;
             railTex.repeat.set(1, 20);
             window.railTex = railTex;
 
             // Realistic Materials (PBR)
-            materials.player = new THREE.MeshStandardMaterial({ color: selectedCharColor, roughness: 0.4, metalness: 0.1 }); 
-            materials.skin = new THREE.MeshStandardMaterial({ color: 0xf1c27d, roughness: 0.6, metalness: 0.1 });
-            materials.jeans = new THREE.MeshStandardMaterial({ color: 0x1a2a3a, roughness: 0.9, metalness: 0.0 });
-            materials.hat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, metalness: 0.1 });
-            materials.shoes = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.5, metalness: 0.1 });
-            materials.hair = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.8, metalness: 0.1 }); // Dark hair
-            materials.jetpack = new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.8, roughness: 0.3 });
-            materials.magnet = new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.6, roughness: 0.3 });
-            materials.superSneaker = new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 0.8 }); 
-            materials.hoverboard = new THREE.MeshPhysicalMaterial({ color: 0xff00cc, metalness: 0.9, roughness: 0.1, clearcoat: 1.0 }); 
+            materials.player = new THREE.MeshStandardMaterial({ color: selectedCharColor, roughness: 0.7 }); 
+            materials.skin = new THREE.MeshStandardMaterial({ color: 0xf1c27d, roughness: 0.9 });
+            materials.jeans = new THREE.MeshStandardMaterial({ color: 0x1a2a3a, roughness: 1.0 });
+            materials.hat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+            materials.shoes = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.5 });
+            materials.hair = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.9 }); // Dark hair
+            materials.jetpack = new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.6, roughness: 0.3 });
+            materials.magnet = new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.5, roughness: 0.2 });
+            materials.superSneaker = new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 0.5 }); 
+            materials.hoverboard = new THREE.MeshStandardMaterial({ color: 0xff00cc, metalness: 0.8, roughness: 0.1 }); 
             materials.mysteryBox = new THREE.MeshStandardMaterial({ color: 0x9b59b6, metalness: 0.4, roughness: 0.2 }); 
             
-            materials.trainBody = new THREE.MeshPhysicalMaterial({ color: 0x27ae60, roughness: 0.2, metalness: 0.8, clearcoat: 1.0, clearcoatRoughness: 0.1 });
-            materials.trainWindow = new THREE.MeshPhysicalMaterial({ color: 0x050505, roughness: 0.1, metalness: 0.9, transmission: 0.9, transparent: true });
+            materials.trainBody = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.4, metalness: 0.2 });
+            materials.trainWindow = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.8 });
             
-            materials.barrierRed = new THREE.MeshStandardMaterial({ color: 0xaa0000, roughness: 0.6, metalness: 0.2 });
-            materials.barrierWhite = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.6, metalness: 0.2 });
+            materials.barrierRed = new THREE.MeshStandardMaterial({ color: 0xaa0000, roughness: 0.5 });
+            materials.barrierWhite = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.5 });
             
             materials.coin = new THREE.MeshPhongMaterial({ color: 0xFFD700, shininess: 100, specular: 0xffffff });
-            materials.rail = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8, metalness: 0.6 });
-            materials.track = new THREE.MeshStandardMaterial({ map: railTex, roughness: 0.9, metalness: 0.1 });
-            materials.police = new THREE.MeshStandardMaterial({ color: CONFIG.colors.policeUniform, roughness: 0.7, metalness: 0.1 });
+            materials.rail = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.6 });
+            materials.track = new THREE.MeshStandardMaterial({ map: railTex, roughness: 0.6 });
+            materials.police = new THREE.MeshStandardMaterial({ color: CONFIG.colors.policeUniform, roughness: 0.6 });
         }
 
         // --- PLAYER SYSTEM ---
