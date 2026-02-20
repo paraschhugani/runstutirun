@@ -339,7 +339,8 @@
                 rails: 0x333333,
                 fog: 0x1a1a1a,
                 policeUniform: 0x1034a6,
-                building: [0x2c3e50, 0x34495e, 0x1a1a1a, 0x2c2c2c]
+                // Indian building colors: dusty pinks, light yellows, terracotta, faded greens, blues, beige
+                building: [0xdc8686, 0xf4d160, 0x82b26b, 0xa5d8dd, 0xe4d3a8, 0xbf5c5c, 0xfaf1e6, 0xd0b49f]
             }
         };
 
@@ -354,6 +355,9 @@
         let totalCoins = 0; // Total bank balance
         let highScore = 0;
         let speedMultiplier = 1.0;
+        let hardModeSpeedMultiplier = 1.0;
+        let hardModeTimer = 0;
+        let hardModeNextEventTimer = 5;
         let clock = new THREE.Clock();
         let frameId;
         let selectedCharColor = 0xff4757;
@@ -394,7 +398,7 @@
         }
 
         function setupCharacterSelection() {
-            const colors = [0xff0000, 0x111111]; // Red, Black
+            const colors = [0xff0000, 0x111111, 0x0000ff]; // Red, Black, Blue
             const container = document.getElementById('char-select-container');
             
             let saved = null;
@@ -413,6 +417,14 @@
                     btn.style.alignItems = "center";
                     btn.style.justifyContent = "center";
                     btn.style.fontSize = "12px"; 
+                    btn.style.fontWeight = "bold";
+                } else if (col === 0x0000ff) {
+                    btn.innerText = "Hard";
+                    btn.style.color = "white";
+                    btn.style.display = "flex";
+                    btn.style.alignItems = "center";
+                    btn.style.justifyContent = "center";
+                    btn.style.fontSize = "11px"; 
                     btn.style.fontWeight = "bold";
                 }
 
@@ -446,73 +458,87 @@
             adjustCamera(); // Initial setup
 
             // Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
             document.body.appendChild(renderer.domElement);
 
             // Lighting (Cinematic Realism)
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
             scene.add(ambientLight);
+            
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
+            hemiLight.position.set(0, 200, 0);
+            scene.add(hemiLight);
 
-            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
             dirLight.position.set(50, 100, 50);
             dirLight.castShadow = true;
-            dirLight.shadow.mapSize.width = 1024;
-            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
             dirLight.shadow.camera.near = 0.5;
-            dirLight.shadow.camera.far = 100;
-            dirLight.shadow.camera.left = -20;
-            dirLight.shadow.camera.right = 20;
-            dirLight.shadow.camera.top = 20;
-            dirLight.shadow.camera.bottom = -20;
+            dirLight.shadow.camera.far = 200;
+            dirLight.shadow.camera.left = -50;
+            dirLight.shadow.camera.right = 50;
+            dirLight.shadow.camera.top = 50;
+            dirLight.shadow.camera.bottom = -50;
+            dirLight.shadow.bias = -0.001;
             scene.add(dirLight);
 
             // Ground Plane (Infinite illusion)
             // Create a dynamic texture for speed sensation
             const canvas = document.createElement('canvas');
-            canvas.width = 128; canvas.height = 128;
+            canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(0,0,128,128);
             ctx.fillStyle = '#222222';
-            for(let i=0; i<10; i++) ctx.fillRect(Math.random()*128, Math.random()*128, 2, 2); // Noise
+            ctx.fillRect(0,0,512,512);
+            for(let i=0; i<15000; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#1a1a1a' : '#2a2a2a';
+                ctx.fillRect(Math.random()*512, Math.random()*512, 2, 2); 
+            }
             const groundTex = new THREE.CanvasTexture(canvas);
+            if (renderer.capabilities) groundTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
             groundTex.wrapS = THREE.RepeatWrapping;
             groundTex.wrapT = THREE.RepeatWrapping;
-            groundTex.repeat.set(20, 40);
+            groundTex.repeat.set(50, 100);
             window.groundTex = groundTex;
 
-            const groundGeo = new THREE.PlaneGeometry(100, 200);
+            const groundGeo = new THREE.PlaneGeometry(300, 600);
             const groundMat = new THREE.MeshStandardMaterial({ 
                 map: groundTex,
-                roughness: 0.8,
-                metalness: 0.2
+                roughness: 0.9,
+                metalness: 0.1
             });
             const ground = new THREE.Mesh(groundGeo, groundMat);
             ground.rotation.x = -Math.PI / 2;
-            ground.position.z = -50;
+            ground.position.z = -100;
             ground.receiveShadow = true;
             scene.add(ground);
 
-            // Neon City Skybox
+            // Realistic Night Sky Skybox
             const skyCanvas = document.createElement('canvas');
-            skyCanvas.width = 512; skyCanvas.height = 512;
+            skyCanvas.width = 1024; skyCanvas.height = 1024;
             const sCtx = skyCanvas.getContext('2d');
-            const skyGrad = sCtx.createLinearGradient(0, 0, 0, 512);
-            skyGrad.addColorStop(0, '#000022');
-            skyGrad.addColorStop(0.5, '#110022');
-            skyGrad.addColorStop(1, '#220044');
+            const skyGrad = sCtx.createLinearGradient(0, 0, 0, 1024);
+            skyGrad.addColorStop(0, '#000814');
+            skyGrad.addColorStop(0.5, '#001d3d');
+            skyGrad.addColorStop(0.8, '#003566');
+            skyGrad.addColorStop(1, '#ffc300'); // City glow at bottom
             sCtx.fillStyle = skyGrad;
-            sCtx.fillRect(0, 0, 512, 512);
+            sCtx.fillRect(0, 0, 1024, 1024);
             
-            // Procedural Neon Buildings/Stars
-            for(let i=0; i<300; i++) {
-                sCtx.fillStyle = ['#0ff', '#f0f', '#ff0', '#fff'][Math.floor(Math.random()*4)];
-                sCtx.globalAlpha = Math.random();
-                const size = Math.random() * 3;
-                sCtx.fillRect(Math.random()*512, Math.random()*512, size, size);
+            // Stars
+            for(let i=0; i<1000; i++) {
+                sCtx.fillStyle = `rgba(255, 255, 255, ${Math.random()})`;
+                const size = Math.random() * 2;
+                sCtx.beginPath();
+                sCtx.arc(Math.random()*1024, Math.random()*512, size, 0, Math.PI * 2);
+                sCtx.fill();
             }
             
             const skyTex = new THREE.CanvasTexture(skyCanvas);
@@ -521,7 +547,7 @@
             skyTex.repeat.set(4, 1);
             
             const skyGeo = new THREE.SphereGeometry(150, 32, 32);
-            const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
+            const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false });
             const skyMesh = new THREE.Mesh(skyGeo, skyMat);
             scene.add(skyMesh);
             window.skyMesh = skyMesh;
@@ -567,38 +593,49 @@
             rCanvas.width = 64; rCanvas.height = 64;
             const rCtx = rCanvas.getContext('2d');
             rCtx.fillStyle = '#5d4037'; rCtx.fillRect(0,0,64,64); // Gravel/Dirt
+            for(let i=0; i<300; i++) {
+                rCtx.fillStyle = Math.random() > 0.5 ? '#4e342e' : '#6d4c41';
+                rCtx.fillRect(Math.random()*64, Math.random()*64, 2, 2);
+            }
             rCtx.fillStyle = '#3e2723'; rCtx.fillRect(0,10,64,10); // Tie
+            for(let i=0; i<50; i++) {
+                rCtx.fillStyle = '#2d1a16';
+                rCtx.fillRect(Math.random()*64, 10 + Math.random()*10, 1, 1);
+            }
             rCtx.fillStyle = '#7f8c8d'; rCtx.fillRect(10,0,8,64); rCtx.fillRect(46,0,8,64); // Rails
+            rCtx.fillStyle = '#bdc3c7'; rCtx.fillRect(12,0,4,64); rCtx.fillRect(48,0,4,64); // Rail shine
             const railTex = new THREE.CanvasTexture(rCanvas);
+            if (renderer.capabilities) railTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
             railTex.wrapS = THREE.RepeatWrapping;
             railTex.wrapT = THREE.RepeatWrapping;
-            railTex.magFilter = THREE.NearestFilter;
+            railTex.magFilter = THREE.LinearFilter;
+            railTex.minFilter = THREE.LinearMipMapLinearFilter;
             railTex.repeat.set(1, 20);
             window.railTex = railTex;
 
             // Realistic Materials (PBR)
-            materials.player = new THREE.MeshStandardMaterial({ color: selectedCharColor, roughness: 0.7 }); 
-            materials.skin = new THREE.MeshStandardMaterial({ color: 0xf1c27d, roughness: 0.9 });
-            materials.jeans = new THREE.MeshStandardMaterial({ color: 0x1a2a3a, roughness: 1.0 });
-            materials.hat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-            materials.shoes = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.5 });
-            materials.hair = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.9 }); // Dark hair
-            materials.jetpack = new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.6, roughness: 0.3 });
-            materials.magnet = new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.5, roughness: 0.2 });
-            materials.superSneaker = new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 0.5 }); 
-            materials.hoverboard = new THREE.MeshStandardMaterial({ color: 0xff00cc, metalness: 0.8, roughness: 0.1 }); 
+            materials.player = new THREE.MeshStandardMaterial({ color: selectedCharColor, roughness: 0.4, metalness: 0.1 }); 
+            materials.skin = new THREE.MeshStandardMaterial({ color: 0xf1c27d, roughness: 0.6, metalness: 0.1 });
+            materials.jeans = new THREE.MeshStandardMaterial({ color: 0x1a2a3a, roughness: 0.9, metalness: 0.0 });
+            materials.hat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, metalness: 0.1 });
+            materials.shoes = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.5, metalness: 0.1 });
+            materials.hair = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.8, metalness: 0.1 }); // Dark hair
+            materials.jetpack = new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.8, roughness: 0.3 });
+            materials.magnet = new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.6, roughness: 0.3 });
+            materials.superSneaker = new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 0.8 }); 
+            materials.hoverboard = new THREE.MeshPhysicalMaterial({ color: 0xff00cc, metalness: 0.9, roughness: 0.1, clearcoat: 1.0 }); 
             materials.mysteryBox = new THREE.MeshStandardMaterial({ color: 0x9b59b6, metalness: 0.4, roughness: 0.2 }); 
             
-            materials.trainBody = new THREE.MeshPhysicalMaterial({ color: 0x27ae60, roughness: 0.1, metalness: 0.9, clearcoat: 1.0 });
-            materials.trainWindow = new THREE.MeshPhysicalMaterial({ color: 0x111111, roughness: 0.0, metalness: 1.0, transmission: 0.5, transparent: true });
+            materials.trainBody = new THREE.MeshPhysicalMaterial({ color: 0x27ae60, roughness: 0.2, metalness: 0.8, clearcoat: 1.0, clearcoatRoughness: 0.1 });
+            materials.trainWindow = new THREE.MeshPhysicalMaterial({ color: 0x050505, roughness: 0.1, metalness: 0.9, transmission: 0.9, transparent: true });
             
-            materials.barrierRed = new THREE.MeshStandardMaterial({ color: 0xaa0000, roughness: 0.5 });
-            materials.barrierWhite = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.5 });
+            materials.barrierRed = new THREE.MeshStandardMaterial({ color: 0xaa0000, roughness: 0.6, metalness: 0.2 });
+            materials.barrierWhite = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.6, metalness: 0.2 });
             
             materials.coin = new THREE.MeshPhongMaterial({ color: 0xFFD700, shininess: 100, specular: 0xffffff });
-            materials.rail = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.6 });
-            materials.track = new THREE.MeshStandardMaterial({ map: railTex, roughness: 0.6 });
-            materials.police = new THREE.MeshStandardMaterial({ color: CONFIG.colors.policeUniform, roughness: 0.6 });
+            materials.rail = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8, metalness: 0.6 });
+            materials.track = new THREE.MeshStandardMaterial({ map: railTex, roughness: 0.9, metalness: 0.1 });
+            materials.police = new THREE.MeshStandardMaterial({ color: CONFIG.colors.policeUniform, roughness: 0.7, metalness: 0.1 });
         }
 
         // --- PLAYER SYSTEM ---
@@ -1134,8 +1171,10 @@
                 // Move Environment towards player (Scroll Z)
                 const moveDist = speed * dt;
 
-                // Spawn Buildings
-                if (Math.random() < 0.02) this.spawnBuilding();
+                // Spawn Buildings frequently (Dense City)
+                if (Math.random() < 0.25) { // Increased from 0.02
+                    this.spawnBuilding();
+                }
 
                 // Spawn Obstacles
                 this.spawnTimer -= dt;
@@ -1640,56 +1679,69 @@
 
 
             spawnBuilding() {
-                const side = Math.random() > 0.5 ? 1 : -1;
-                const x = side * (15 + Math.random() * 10);
-                const h = 10 + Math.random() * 20;
-                // Make buildings slightly wider/deeper to accommodate signs
-                const w = 8 + Math.random() * 6; // Min 8
-                const d = 8 + Math.random() * 6; // Min 8
+                // Spawn on both sides frequently
+                const sides = [-1, 1];
                 
-                const geo = new THREE.BoxGeometry(w, h, d);
-                // Add window details for realism
-                const winGeo = new THREE.BoxGeometry(w + 0.1, 0.5, d + 0.1);
-                const winMat = new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffffaa, emissiveIntensity: 0.2 });
-                
-                const col = CONFIG.colors.building[Math.floor(Math.random()*CONFIG.colors.building.length)];
-                const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 });
-                const mesh = new THREE.Mesh(geo, mat);
-                for(let i=1; i<h/2; i+=2) {
-                    const win = new THREE.Mesh(winGeo, winMat);
-                    win.position.y = i - h/2;
-                    mesh.add(win);
-                }
+                sides.forEach(side => {
+                    // Slight variation in depth/position for chaotic Indian city look
+                    const x = side * (12 + Math.random() * 5); // Closer to track
+                    const h = 8 + Math.random() * 25; // Variable heights
+                    const w = 6 + Math.random() * 8; // Variable widths
+                    // Deep buildings to block skyline
+                    const d = 10 + Math.random() * 15; 
+                    
+                    const geo = new THREE.BoxGeometry(w, h, d);
+                    
+                    // Windows setup
+                    const winGeo = new THREE.BoxGeometry(w + 0.1, 0.4, d + 0.1);
+                    const winMat = new THREE.MeshStandardMaterial({ color: 0xffffaa, emissive: 0xffffcc, emissiveIntensity: 0.4 });
+                    
+                    const col = CONFIG.colors.building[Math.floor(Math.random()*CONFIG.colors.building.length)];
+                    // Make material slightly rougher for concrete/plaster look
+                    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.9, metalness: 0.0 });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    
+                    // Add windows, sometimes skip rows for realism
+                    for(let i=1; i<h-1; i+=2.5) {
+                        if (Math.random() > 0.2) { 
+                            const win = new THREE.Mesh(winGeo, winMat);
+                            win.position.y = i - h/2;
+                            mesh.add(win);
+                        }
+                    }
 
-                // --- ADD SIGNBOARD ---
-                if (Math.random() < 0.8) { // 80% chance
-                    const name = BUILDING_NAMES[Math.floor(Math.random() * BUILDING_NAMES.length)];
-                    const signTex = createTextTexture(name);
-                    
-                    // Aspect Ratio 2:1. Width limited by building width.
-                    // Let's use 90% of building width.
-                    const signW = w * 0.9;
-                    const signH = signW * 0.5; // Keep 2:1 aspect
-                    
-                    const signGeo = new THREE.PlaneGeometry(signW, signH); 
-                    const signMat = new THREE.MeshBasicMaterial({ map: signTex });
-                    const sign = new THREE.Mesh(signGeo, signMat);
-                    
-                    // Position: Top-ish of building, facing CAMERA (Front Face)
-                    // Front face is at +Z relative to center (d/2)
-                    sign.position.y = h/2 - signH/2 - 1; 
-                    sign.position.z = d/2 + 0.1; 
-                    sign.position.x = 0;
-                    
-                    // Face Forward (Normal +Z) -> No rotation needed
-                    sign.rotation.set(0, 0, 0);
-                    
-                    mesh.add(sign);
-                }
+                    // --- ADD SIGNBOARD ---
+                    if (Math.random() < 0.3) { // 30% chance for signs
+                        const name = BUILDING_NAMES[Math.floor(Math.random() * BUILDING_NAMES.length)];
+                        const signTex = createTextTexture(name);
+                        
+                        const signW = w * 0.9;
+                        const signH = signW * 0.5; 
+                        
+                        const signGeo = new THREE.PlaneGeometry(signW, signH); 
+                        const signMat = new THREE.MeshBasicMaterial({ map: signTex });
+                        const sign = new THREE.Mesh(signGeo, signMat);
+                        
+                        // Attach to front face (facing track)
+                        sign.position.y = (Math.random() * h) - h/2; // Random height 
+                        
+                        // Face towards center track
+                        if (side === 1) { // Right side building
+                            sign.position.x = -w/2 - 0.1;
+                            sign.rotation.y = -Math.PI / 2;
+                        } else { // Left side building
+                            sign.position.x = w/2 + 0.1;
+                            sign.rotation.y = Math.PI / 2;
+                        }
+                        
+                        mesh.add(sign);
+                    }
 
-                mesh.position.set(x, h/2 - 5, -100);
-                scene.add(mesh);
-                this.buildings.push(mesh);
+                    // Z position: spawn slightly ahead of the fog
+                    mesh.position.set(x, h/2 - 0.5, -120 - Math.random() * 20);
+                    scene.add(mesh);
+                    this.buildings.push(mesh);
+                });
             }
 
             checkPowerupCollision(player, powerup) {
@@ -1746,6 +1798,10 @@
             score = 0;
             coins = 0;
             speedMultiplier = 1.0;
+            hardModeSpeedMultiplier = 1.0;
+            hardModeTimer = 0;
+            hardModeNextEventTimer = 5 + Math.random() * 5;
+            document.body.style.filter = 'none';
             updateHUD();
 
             if (!worldChunkManager) worldChunkManager = new WorldManager();
@@ -2066,11 +2122,34 @@
 
             if (gameActive) {
                 // Game Mechanics
-                const currentSpeed = CONFIG.playerSpeed * speedMultiplier;
+                let finalSpeedMultiplier = speedMultiplier;
+
+                if (selectedCharColor === 0x0000ff) {
+                    if (hardModeTimer > 0) {
+                        hardModeTimer -= dt;
+                        finalSpeedMultiplier *= hardModeSpeedMultiplier;
+                        if (hardModeTimer <= 0) {
+                            hardModeSpeedMultiplier = 1.0;
+                            hardModeNextEventTimer = 5 + Math.random() * 10;
+                        }
+                    } else {
+                        hardModeNextEventTimer -= dt;
+                        if (hardModeNextEventTimer <= 0) {
+                            hardModeTimer = 2 + Math.random() * 3;
+                            if (Math.random() < 0.5) {
+                                hardModeSpeedMultiplier = 0.4 + Math.random() * 0.3; // Slower
+                            } else {
+                                hardModeSpeedMultiplier = 1.5 + Math.random() * 1.0; // Faster
+                            }
+                        }
+                    }
+                }
+
+                const currentSpeed = CONFIG.playerSpeed * finalSpeedMultiplier;
                 
                 // Ground & FOV Logic
-                player.update(dt, speedMultiplier);
-                police.update(dt, speedMultiplier);
+                player.update(dt, finalSpeedMultiplier);
+                police.update(dt, finalSpeedMultiplier);
                 
                 const targetFov = 60 + (player.mesh.position.y * 1.5);
                 camera.fov += (targetFov - camera.fov) * 0.1;
@@ -2093,11 +2172,22 @@
                 speedMultiplier += CONFIG.acceleration * dt; // Gradually get faster
                 speedMultiplier = Math.min(speedMultiplier, 2.5); // Cap speed
 
+                if (selectedCharColor === 0x0000ff) {
+                    if (Math.floor(score / 500) % 2 === 1) {
+                        document.body.style.filter = 'invert(1) hue-rotate(180deg)';
+                    } else {
+                        document.body.style.filter = 'none';
+                    }
+                } else {
+                    document.body.style.filter = 'none';
+                }
+
                 MemeController.update(dt);
                 updateHUD();
             } else {
                 // Menu Idle Animation
                 if(player) player.mesh.rotation.y = Math.sin(clock.getElapsedTime()) * 0.1;
+                document.body.style.filter = 'none';
             }
 
             renderer.render(scene, camera);
